@@ -3,13 +3,14 @@ import base64
 import json
 import mimetypes
 from pathlib import Path
+import random
 import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
-from bildkasten_core import BASE, METADATA_PATH, image_files
+from bildkasten_core import BASE, METADATA_PATH, image_files, search as clip_search
 
 
 DEFAULT_PORT = 8765
@@ -41,18 +42,24 @@ def collect_images(folder=None):
 
 
 def image_payload(paths, mode, count):
-    selected = paths
-    if mode == "recent":
-        selected = paths[:count]
+    selected = list(enumerate(paths))
+    if mode == "all":
+        random.shuffle(selected)
+    elif mode == "recent":
+        selected = selected[:count]
     return [
-        {
-            "id": i,
-            "name": p.name,
-            "mtime": int(p.stat().st_mtime),
-            "url": f"/image/{i}",
-        }
-        for i, p in enumerate(selected)
+        image_record(i, p)
+        for i, p in selected
     ]
+
+
+def image_record(image_id, path):
+    return {
+        "id": image_id,
+        "name": path.name,
+        "mtime": int(path.stat().st_mtime),
+        "url": f"/image/{image_id}",
+    }
 
 
 def page_html():
@@ -65,6 +72,7 @@ def page_html():
   <style>
     :root { color-scheme: light; --bg:#f5f5f2; --paper:#fff; --fg:#171717; --muted:#666; --line:#c9c9c3; --soft:#eeeeea; }
     * { box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
     body { min-height: 100vh; margin: 0; display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
     header { display: grid; grid-template-columns: auto 1fr; gap: .65rem 1rem; align-items: start; padding: .8rem 1rem; border-bottom: 1px solid var(--line); background: var(--paper); }
     .title { min-width: 220px; }
@@ -78,14 +86,29 @@ def page_html():
     button:hover { background: var(--soft); }
     button.active { background: #171717; border-color: #171717; color: #fff; }
     input[type=number] { width: 5.5rem; }
+    .search-input { width: 12rem; }
     input[type=range] { width: 7rem; vertical-align: middle; }
-    main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(360px, 1fr); gap: 1rem; padding: 1rem; }
-    .pane { min-width: 0; display: flex; flex-direction: column; gap: .6rem; }
+    main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(220px, var(--left-pane, 50%)) 18px minmax(260px, 1fr); gap: 0; padding: 1rem; touch-action: none; }
+    .pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: .6rem; }
+    .pane.left-pane { padding-right: .7rem; }
+    .pane.right-pane { padding-left: .7rem; }
+    .divider { position: relative; cursor: col-resize; touch-action: none; background: transparent; }
+    .divider::before { content: ""; position: absolute; top: 0; bottom: 0; left: 7px; width: 4px; border-left: 1px solid #aaa696; border-right: 1px solid #fff; background: #d7d3c3; }
+    .divider::after { content: ""; position: absolute; top: 50%; left: 4px; width: 10px; height: 42px; transform: translateY(-50%); border: 1px solid #aaa696; background: repeating-linear-gradient(90deg, #c6c1b0 0 1px, #ece8da 1px 3px); }
+    .divider:hover::before, .divider.dragging::before { background: #bdb7a6; }
+    .divider:hover::after, .divider.dragging::after { background: repeating-linear-gradient(90deg, #9f9987 0 1px, #d5d0c0 1px 3px); }
     .label { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; color: var(--muted); font-size: .9rem; }
     .label strong { color: var(--fg); font-size: 1rem; font-weight: 650; }
+    .label-actions { display: inline-flex; gap: .25rem; align-items: center; min-width: 0; }
+    .label-actions button { padding: .12rem .38rem; min-width: 1.8rem; }
+    #refName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .frame { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--paper); border: 1px solid var(--line); overflow: hidden; padding: .5rem; }
-    #reference { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
-    #board { max-width: 100%; max-height: 100%; width: auto; height: auto; background: #fff; border: 1px solid #ddd; touch-action: none; cursor: crosshair; }
+    .board-frame { background: #474744; touch-action: none; user-select: none; -webkit-user-select: none; }
+    #reference { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+    .canvas-stack { position: relative; background: #fff; border: 1px solid #a7a7a0; user-select: none; -webkit-user-select: none; }
+    .canvas-stack canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #guide { pointer-events: none; }
+    #board { touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
     .bar { display: grid; grid-template-columns: 1fr auto; gap: .7rem; align-items: center; }
     progress { width: 100%; height: 1rem; border: 1px solid var(--line); background: var(--paper); }
     progress::-webkit-progress-bar { background: var(--paper); }
@@ -101,6 +124,8 @@ def page_html():
       header { grid-template-columns: 1fr; }
       .controls.secondary { grid-column: 1; }
       main { grid-template-columns: 1fr; min-height: auto; }
+      .pane.left-pane, .pane.right-pane { padding: 0; }
+      .divider { display: none; }
       .frame { min-height: 42vh; }
     }
   </style>
@@ -112,16 +137,19 @@ def page_html():
       <span>rough redraws, one reference at a time</span>
     </div>
     <div class="controls primary">
+      <input id="clipSearch" class="search-input" type="search" placeholder="Search">
       <select id="mode">
         <option value="recent" data-count="30">30 most recent</option>
         <option value="recent" data-count="100">100 most recent</option>
-        <option value="all">All images</option>
+        <option value="all" selected>All images</option>
         <option value="recent" data-custom="1">Custom recent</option>
       </select>
       <input id="count" type="number" min="1" value="30" hidden>
       <select id="aspect">
         <option value="16:9">16:9</option>
-        <option value="4:3">4:3</option>
+        <option value="4:3" selected>4:3</option>
+        <option value="2:1">Pan H 2:1</option>
+        <option value="3:4">Pan V 3:4</option>
       </select>
       <button id="start">Load</button>
       <span class="status" id="status"></span>
@@ -130,22 +158,36 @@ def page_html():
       <button id="prev">Prev</button>
       <button id="next">Save + Next</button>
       <button id="skip">Skip</button>
-      <span class="hint">P pen · E eraser · Ctrl+Z undo</span>
+      <span class="hint">P pen · E eraser · Ctrl+Enter save + next · Ctrl+Z undo</span>
     </div>
   </header>
 
   <main>
-    <section class="pane">
-      <div class="label"><strong>Reference</strong><span id="refName"></span></div>
+    <section class="pane left-pane">
+      <div class="label">
+        <strong>Reference</strong>
+        <span class="label-actions">
+          <span id="refName"></span>
+          <button id="refSmaller" title="Make reference smaller">-</button>
+          <button id="refReset" title="Even split">=</button>
+          <button id="refBigger" title="Make reference bigger">+</button>
+        </span>
+      </div>
       <div class="frame">
         <img id="reference" alt="">
         <div id="empty" class="empty" hidden>No images found. Run bildkasten index /path/to/images or pass a folder to storyboard.</div>
       </div>
       <div class="bar"><progress id="progress" value="0" max="1"></progress><span id="counter">0/0</span></div>
     </section>
-    <section class="pane">
+    <div id="divider" class="divider" title="Drag to resize"></div>
+    <section class="pane right-pane">
       <div class="label"><strong>Board</strong><span id="saveState" class="save-state">Not saved yet</span></div>
-      <div class="frame"><canvas id="board"></canvas></div>
+      <div id="boardFrame" class="frame board-frame">
+        <div id="canvasStack" class="canvas-stack">
+          <canvas id="guide"></canvas>
+          <canvas id="board"></canvas>
+        </div>
+      </div>
       <div class="tools">
         <button id="pen" class="active">Pen</button>
         <button id="eraser">Eraser</button>
@@ -161,8 +203,14 @@ def page_html():
   <script>
     const img = document.getElementById('reference');
     const empty = document.getElementById('empty');
+    const workArea = document.querySelector('main');
+    const canvasStack = document.getElementById('canvasStack');
+    const boardFrame = document.getElementById('boardFrame');
+    const guide = document.getElementById('guide');
+    const guideCtx = guide.getContext('2d');
     const canvas = document.getElementById('board');
     const ctx = canvas.getContext('2d');
+    const clipSearch = document.getElementById('clipSearch');
     const mode = document.getElementById('mode');
     const count = document.getElementById('count');
     const aspect = document.getElementById('aspect');
@@ -175,6 +223,10 @@ def page_html():
     const brushValue = document.getElementById('brushValue');
     const penBtn = document.getElementById('pen');
     const eraserBtn = document.getElementById('eraser');
+    const divider = document.getElementById('divider');
+    const refSmaller = document.getElementById('refSmaller');
+    const refReset = document.getElementById('refReset');
+    const refBigger = document.getElementById('refBigger');
     let images = [];
     let index = 0;
     let drawing = false;
@@ -182,6 +234,10 @@ def page_html():
     let undoStack = [];
     let saveTimer = null;
     let tool = 'pen';
+    let lastPoint = null;
+    let resizing = false;
+    let strokeChanged = false;
+    let strokeUndoCaptured = false;
 
     function status(text) { statusEl.textContent = text; }
 
@@ -190,31 +246,91 @@ def page_html():
       saveTimer = null;
     }
 
+    function setPaneSplit(clientX) {
+      const main = document.querySelector('main');
+      const rect = main.getBoundingClientRect();
+      const pct = Math.max(24, Math.min(76, ((clientX - rect.left) / rect.width) * 100));
+      setPaneSplitPercent(pct);
+    }
+
+    function setPaneSplitPercent(pct) {
+      const main = document.querySelector('main');
+      pct = Math.max(24, Math.min(76, pct));
+      main.style.setProperty('--left-pane', pct.toFixed(1) + '%');
+      localStorage.setItem('bildkastenStorySplit', pct.toFixed(1));
+      requestAnimationFrame(fitCanvasStack);
+    }
+
+    function restorePaneSplit() {
+      const pct = Number(localStorage.getItem('bildkastenStorySplit') || 50);
+      if (Number.isFinite(pct)) {
+        setPaneSplitPercent(pct);
+      }
+    }
+
     function canvasSize() {
-      return aspect.value === '4:3' ? [1280, 960] : [1280, 720];
+      const sizes = {
+        '16:9': [1280, 720],
+        '4:3': [1280, 960],
+        '2:1': [1440, 720],
+        '3:4': [960, 1280],
+      };
+      return sizes[aspect.value] || sizes['4:3'];
     }
 
     function resetCanvas() {
       const [w, h] = canvasSize();
+      guide.width = w;
+      guide.height = h;
       canvas.width = w;
       canvas.height = h;
-      fillWhite();
+      fitCanvasStack();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGuides();
       undoStack = [];
       dirty = false;
       saveState.textContent = 'Not saved yet';
     }
 
-    function fillWhite() {
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+    function fitCanvasStack() {
+      if (!canvas.width || !canvas.height) return;
+      const style = getComputedStyle(boardFrame);
+      const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const maxW = Math.max(1, boardFrame.clientWidth - padX);
+      const maxH = Math.max(1, boardFrame.clientHeight - padY);
+      const scale = Math.min(maxW / canvas.width, maxH / canvas.height);
+      canvasStack.style.width = Math.floor(canvas.width * scale) + 'px';
+      canvasStack.style.height = Math.floor(canvas.height * scale) + 'px';
+    }
+
+    function drawGuides() {
+      guideCtx.clearRect(0, 0, guide.width, guide.height);
+      guideCtx.fillStyle = 'white';
+      guideCtx.fillRect(0, 0, guide.width, guide.height);
+      guideCtx.save();
+      guideCtx.strokeStyle = '#17345f';
+      guideCtx.lineWidth = 1.25;
+      guideCtx.globalAlpha = 0.55;
+      const w = guide.width;
+      const h = guide.height;
+      const mx = Math.round(w * 0.075) + 0.5;
+      const my = Math.round(h * 0.075) + 0.5;
+      guideCtx.strokeRect(mx, my, Math.max(1, w - mx * 2), Math.max(1, h - my * 2));
+      const cx = Math.round(w / 2) + 0.5;
+      const cy = Math.round(h / 2) + 0.5;
+      const arm = Math.max(18, Math.round(Math.min(w, h) * 0.035));
+      guideCtx.beginPath();
+      guideCtx.moveTo(cx - arm, cy);
+      guideCtx.lineTo(cx + arm, cy);
+      guideCtx.moveTo(cx, cy - arm);
+      guideCtx.lineTo(cx, cy + arm);
+      guideCtx.stroke();
+      guideCtx.restore();
       applyTool();
     }
 
     function applyTool() {
-      ctx.strokeStyle = tool === 'eraser' ? 'white' : 'black';
-      ctx.lineWidth = Number(brush.value);
       brushValue.textContent = brush.value;
       penBtn.classList.toggle('active', tool === 'pen');
       eraserBtn.classList.toggle('active', tool === 'eraser');
@@ -252,6 +368,21 @@ def page_html():
 
     async function loadImages() {
       if (dirty) await saveCurrent(false);
+      const q = clipSearch.value.trim();
+      if (q) {
+        status('Searching...');
+        const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        if (!res.ok) {
+          status(data.error || 'Search failed');
+          return;
+        }
+        images = data.images;
+        index = 0;
+        status(data.selected + ' CLIP matches for: ' + q);
+        showImage();
+        return;
+      }
       const opt = mode.options[mode.selectedIndex];
       count.hidden = !opt.dataset.custom;
       const n = opt.dataset.custom ? count.value : (opt.dataset.count || count.value);
@@ -266,9 +397,12 @@ def page_html():
 
     function pointerPos(e) {
       const rect = canvas.getBoundingClientRect();
+      const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+        e.clientY >= rect.top && e.clientY <= rect.bottom;
       return {
         x: (e.clientX - rect.left) * canvas.width / rect.width,
         y: (e.clientY - rect.top) * canvas.height / rect.height,
+        inside,
       };
     }
 
@@ -277,39 +411,131 @@ def page_html():
       if (undoStack.length > 20) undoStack.shift();
     }
 
-    canvas.addEventListener('pointerdown', e => {
+    function captureStrokeUndo() {
+      if (strokeUndoCaptured) return;
       pushUndo();
-      drawing = true;
-      canvas.setPointerCapture(e.pointerId);
-      applyTool();
-      const p = pointerPos(e);
-      ctx.fillStyle = ctx.strokeStyle;
+      strokeUndoCaptured = true;
+    }
+
+    function dabColour(alpha) {
+      return 'rgba(0,0,0,' + alpha + ')';
+    }
+
+    function paintDab(p) {
+      const radius = Math.max(0.6, Number(brush.value) / 2);
+      const soft = Math.max(0.35, radius * 0.22);
+      const prevComposite = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius + soft);
+      grad.addColorStop(0, dabColour(0.98));
+      grad.addColorStop(Math.max(0.72, radius / (radius + soft)), dabColour(0.94));
+      grad.addColorStop(1, dabColour(0));
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(1, ctx.lineWidth / 2), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, radius + soft, 0, Math.PI * 2);
       ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
+      ctx.globalCompositeOperation = prevComposite;
+    }
+
+    function paintBetween(a, b) {
+      const radius = Math.max(0.6, Number(brush.value) / 2);
+      const step = Math.max(0.45, radius * 0.42);
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy);
+      const count = Math.max(1, Math.ceil(dist / step));
+      for (let i = 1; i <= count; i++) {
+        const t = i / count;
+        paintDab({ x: a.x + dx * t, y: a.y + dy * t });
+      }
+    }
+
+    function paintEvent(e) {
+      const p = pointerPos(e);
+      if (!p.inside) {
+        lastPoint = null;
+        return false;
+      }
+      captureStrokeUndo();
+      if (!lastPoint) {
+        paintDab(p);
+      } else {
+        paintBetween(lastPoint, p);
+      }
+      lastPoint = p;
+      return true;
+    }
+
+    function markStrokeChanged() {
+      strokeChanged = true;
       dirty = true;
       saveState.textContent = 'Unsaved changes';
+    }
+
+    function canStartStroke(e) {
+      if (e.target.closest('button, input, select, label, .divider, .tools, .bar')) return false;
+      return Boolean(e.target.closest('.board-frame, .left-pane .frame'));
+    }
+
+    workArea.addEventListener('pointerdown', e => {
+      if (!canStartStroke(e)) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      drawing = true;
+      strokeChanged = false;
+      strokeUndoCaptured = false;
+      lastPoint = null;
+      workArea.setPointerCapture(e.pointerId);
+      applyTool();
+      if (paintEvent(e)) markStrokeChanged();
     });
 
-    canvas.addEventListener('pointermove', e => {
+    workArea.addEventListener('pointermove', e => {
       if (!drawing) return;
-      const p = pointerPos(e);
+      e.preventDefault();
       applyTool();
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-      dirty = true;
-      saveState.textContent = 'Unsaved changes';
+      const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
+      let painted = false;
+      for (const event of events) {
+        if (paintEvent(event)) painted = true;
+      }
+      if (painted) markStrokeChanged();
     });
 
     function endStroke() {
       if (!drawing) return;
       drawing = false;
-      scheduleSave();
+      lastPoint = null;
+      if (strokeChanged) scheduleSave();
     }
-    canvas.addEventListener('pointerup', endStroke);
-    canvas.addEventListener('pointercancel', endStroke);
+    workArea.addEventListener('pointerup', endStroke);
+    workArea.addEventListener('pointercancel', endStroke);
+    workArea.addEventListener('contextmenu', e => {
+      if (canStartStroke(e)) e.preventDefault();
+    });
+    workArea.addEventListener('dragstart', e => e.preventDefault());
+    img.addEventListener('dragstart', e => e.preventDefault());
+
+    divider.addEventListener('pointerdown', e => {
+      resizing = true;
+      divider.classList.add('dragging');
+      divider.setPointerCapture(e.pointerId);
+      setPaneSplit(e.clientX);
+    });
+    divider.addEventListener('pointermove', e => {
+      if (resizing) setPaneSplit(e.clientX);
+    });
+    function endResize() {
+      resizing = false;
+      divider.classList.remove('dragging');
+    }
+    divider.addEventListener('pointerup', endResize);
+    divider.addEventListener('pointercancel', endResize);
+    divider.addEventListener('dblclick', () => setPaneSplitPercent(50));
+    refSmaller.onclick = () => setPaneSplitPercent(Number(localStorage.getItem('bildkastenStorySplit') || 50) - 8);
+    refReset.onclick = () => setPaneSplitPercent(50);
+    refBigger.onclick = () => setPaneSplitPercent(Number(localStorage.getItem('bildkastenStorySplit') || 50) + 8);
+    window.addEventListener('resize', fitCanvasStack);
 
     function scheduleSave() {
       cancelScheduledSave();
@@ -325,7 +551,7 @@ def page_html():
         imageId: item.id,
         imageName: item.name,
         aspect: aspect.value,
-        dataUrl: canvas.toDataURL('image/png'),
+        dataUrl: exportCanvas().toDataURL('image/png'),
       };
       const res = await fetch('/api/save', {
         method: 'POST',
@@ -368,13 +594,32 @@ def page_html():
 
     function clearBoard() {
       pushUndo();
-      fillWhite();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       dirty = true;
       saveState.textContent = 'Unsaved changes';
       scheduleSave();
     }
 
+    function exportCanvas() {
+      const out = document.createElement('canvas');
+      out.width = canvas.width;
+      out.height = canvas.height;
+      const outCtx = out.getContext('2d');
+      outCtx.drawImage(guide, 0, 0);
+      outCtx.drawImage(canvas, 0, 0);
+      return out;
+    }
+
     document.getElementById('start').onclick = loadImages;
+    clipSearch.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        loadImages();
+      } else if (e.key === 'Escape') {
+        clipSearch.value = '';
+        loadImages();
+      }
+    });
     document.getElementById('save').onclick = () => saveCurrent(true);
     document.getElementById('next').onclick = () => next(true);
     document.getElementById('skip').onclick = () => next(false);
@@ -398,15 +643,27 @@ def page_html():
     };
     mode.onchange = () => { count.hidden = !mode.options[mode.selectedIndex].dataset.custom; };
     document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        next(true);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        e.stopPropagation();
+        undo();
+        return;
+      }
       if (e.target.matches('input, select, textarea')) return;
       if (e.key.toLowerCase() === 'p') setTool('pen');
       if (e.key.toLowerCase() === 'e') setTool('eraser');
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      if (e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undo();
       }
-    });
+    }, true);
 
+    restorePaneSplit();
     resetCanvas();
     loadImages();
   </script>
@@ -470,6 +727,37 @@ class StoryboardHandler(BaseHTTPRequestHandler):
                 "out": str(self.server.out_dir),
             })
             return
+        if parsed.path == "/api/search":
+            params = parse_qs(parsed.query)
+            query = params.get("q", [""])[0].strip()
+            if not query:
+                images = image_payload(self.server.paths, "all", 80)
+                self.send_json({
+                    "images": images,
+                    "selected": len(images),
+                    "total": len(self.server.paths),
+                    "out": str(self.server.out_dir),
+                })
+                return
+            try:
+                results = clip_search(query, limit=80)
+                images = []
+                for result in results:
+                    path = Path(result["path"]).expanduser().resolve()
+                    if not path.exists():
+                        continue
+                    image_id = self.server.id_for_path(path)
+                    images.append(image_record(image_id, path))
+                self.send_json({
+                    "images": images,
+                    "selected": len(images),
+                    "total": len(self.server.paths),
+                    "query": query,
+                    "out": str(self.server.out_dir),
+                })
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=400)
+            return
         if parsed.path.startswith("/image/"):
             self.send_image(self.image_path_from_request())
             return
@@ -513,8 +801,16 @@ class StoryboardHandler(BaseHTTPRequestHandler):
 class StoryboardServer(ThreadingHTTPServer):
     def __init__(self, address, handler, paths, out_dir):
         super().__init__(address, handler)
-        self.paths = paths
+        self.paths = list(paths)
+        self.path_ids = {p.resolve(): i for i, p in enumerate(self.paths)}
         self.out_dir = out_dir
+
+    def id_for_path(self, path):
+        path = path.resolve()
+        if path not in self.path_ids:
+            self.path_ids[path] = len(self.paths)
+            self.paths.append(path)
+        return self.path_ids[path]
 
 
 def main(argv=None):

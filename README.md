@@ -147,24 +147,39 @@ Storyboard mode opens a local browser page:
 bildkasten storyboard
 ```
 
-It shows one reference image on the left and a white canvas on the right. Use it
-for rough storyboard ideas, not polished art.
+It shows one reference image on the left and a white canvas on the right. Drag
+the wide divider between them when you want the reference or the drawing board
+bigger; double-click the divider or press `=` in the Reference label to reset
+the split. Use it for rough storyboard ideas, not polished art.
 
 The important controls are:
 
 - `Pen` / `p`: draw black strokes.
 - `Eraser` / `e`: erase with white strokes.
 - Brush slider: change stroke size.
-- `Undo` / `Ctrl+Z`: undo the last stroke or clear.
+- `Undo` / `Ctrl+Z` / `z`: undo the last stroke or clear.
 - `Clear`: wipe the current board.
 - `Save now`: save the current board.
 - `Save + Next`: save and move forward.
+- `Ctrl+Enter`: save and move forward.
 - `Skip`: move forward without intentionally saving the current board.
 - `Prev`: go back one image.
-- Aspect selector: switch between `16:9` and `4:3`.
+- Reference `-` / `=` / `+`: make the reference pane smaller, reset, or bigger.
+- Search: type a CLIP query and press `Enter` to load the top 80 reference
+  images; clear it and press `Enter` to return to shuffled All images.
+- Aspect selector: switch between `4:3`, `16:9`, `Pan H 2:1`, and `Pan V 3:4`.
+  The pan formats give you moderate extra width/height for later camera moves.
 
-You can choose the `30 most recent`, `100 most recent`, `All images`, or a custom
-recent count. Boards autosave after each stroke and are saved as PNG files in:
+The drawing canvas uses a soft dab brush rather than straight vector strokes,
+so quick sketching feels more like marking pixels on paper. The dark surround
+around the board makes the composition edge easier to see. Each board includes
+a thin dark-blue center cross and safe-area border, visible while drawing and
+saved into the final PNG.
+
+`All images` is the default and is shuffled each time you load it. You can also
+choose the `30 most recent`, `100 most recent`, or a custom recent count.
+`4:3` is the default board format. Boards autosave after each stroke and are
+saved as PNG files in:
 
 ```text
 storyboards/
