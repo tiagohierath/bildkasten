@@ -149,8 +149,8 @@ bildkasten storyboard
 
 It shows one reference image on the left and a white canvas on the right. Drag
 the wide divider between them when you want the reference or the drawing board
-bigger; double-click the divider or press `=` in the Reference label to reset
-the split. Use it for rough storyboard ideas, not polished art.
+bigger; click `=` in the divider or double-click the divider to reset the view.
+Use it for rough storyboard ideas, not polished art.
 
 The important controls are:
 
@@ -166,7 +166,9 @@ The important controls are:
 - `Ctrl+Enter`: save and move forward.
 - `Skip`: move forward without intentionally saving the current board.
 - `Prev`: go back one image.
-- Reference `-` / `=` / `+`: make the reference pane smaller, reset, or bigger.
+- Reference `-` / `+`: zoom only the reference image inside its pane.
+- Divider `=`: reset the pane split and reference zoom.
+- Reference `Mirror`: flip the reference and trace underlay horizontally.
 - Search: type a CLIP query and press `Enter` to load the top 80 reference
   images; clear it and press `Enter` to return to shuffled All images.
 - Aspect selector: switch between `4:3`, `16:9`, `Pan H 2:1`, and `Pan V 3:4`.

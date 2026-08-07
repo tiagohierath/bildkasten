@@ -97,6 +97,8 @@ def page_html():
     .divider::after { content: ""; position: absolute; top: 50%; left: 4px; width: 10px; height: 42px; transform: translateY(-50%); border: 1px solid #aaa696; background: repeating-linear-gradient(90deg, #c6c1b0 0 1px, #ece8da 1px 3px); }
     .divider:hover::before, .divider.dragging::before { background: #bdb7a6; }
     .divider:hover::after, .divider.dragging::after { background: repeating-linear-gradient(90deg, #9f9987 0 1px, #d5d0c0 1px 3px); }
+    .divider button { position: absolute; top: 50%; left: 50%; z-index: 3; width: 1.35rem; height: 1.35rem; transform: translate(-50%, -50%); padding: 0; line-height: 1; border-color: #aaa696; background: #ece8da; cursor: pointer; }
+    .divider button:hover { background: #fff; }
     .label { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; color: var(--muted); font-size: .9rem; }
     .label strong { color: var(--fg); font-size: 1rem; font-weight: 650; }
     .label-title { display: inline-flex; gap: .45rem; align-items: center; min-width: 0; }
@@ -106,7 +108,8 @@ def page_html():
     #refName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .frame { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--paper); border: 1px solid var(--line); overflow: hidden; padding: .5rem; }
     .board-frame { background: #474744; touch-action: none; user-select: none; -webkit-user-select: none; }
-    #reference { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+    #reference { width: var(--ref-size, 100%); height: var(--ref-size, 100%); max-width: none; max-height: none; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+    #reference.mirrored, .trace-ref.mirrored { transform: scaleX(-1); }
     .canvas-stack { position: relative; background: #fff; border: 1px solid #a7a7a0; user-select: none; -webkit-user-select: none; }
     .canvas-stack canvas, .trace-ref { position: absolute; inset: 0; width: 100%; height: 100%; }
     .trace-ref { z-index: 1; object-fit: contain; opacity: .46; filter: grayscale(1) contrast(.92) brightness(1.1); pointer-events: none; }
@@ -184,9 +187,9 @@ def page_html():
         <strong>Reference</strong>
         <span class="label-actions">
           <span id="refName"></span>
-          <button id="refSmaller" title="Make reference smaller">-</button>
-          <button id="refReset" title="Even split">=</button>
-          <button id="refBigger" title="Make reference bigger">+</button>
+          <button id="refSmaller" title="Make reference image smaller">-</button>
+          <button id="refBigger" title="Make reference image bigger">+</button>
+          <button id="refMirror" title="Mirror reference horizontally">Mirror</button>
         </span>
       </div>
       <div class="frame">
@@ -195,7 +198,7 @@ def page_html():
       </div>
       <div class="bar"><progress id="progress" value="0" max="1"></progress><span id="counter">0/0</span></div>
     </section>
-    <div id="divider" class="divider" title="Drag to resize"></div>
+    <div id="divider" class="divider" title="Drag to resize"><button id="viewReset" title="Reset view">=</button></div>
     <section class="pane right-pane">
       <div class="label">
         <span class="label-title"><strong>Board</strong><button id="trace" title="Show reference under the board">Trace</button></span>
@@ -248,9 +251,10 @@ def page_html():
     const eraserBtn = document.getElementById('eraser');
     const traceBtn = document.getElementById('trace');
     const divider = document.getElementById('divider');
+    const viewReset = document.getElementById('viewReset');
     const refSmaller = document.getElementById('refSmaller');
-    const refReset = document.getElementById('refReset');
     const refBigger = document.getElementById('refBigger');
+    const refMirror = document.getElementById('refMirror');
     let images = [];
     let index = 0;
     let drawing = false;
@@ -259,6 +263,9 @@ def page_html():
     let saveTimer = null;
     let tool = 'pen';
     let trace = localStorage.getItem('bildkastenStoryTrace') === '1';
+    let refScale = Number(localStorage.getItem('bildkastenStoryRefScale') || 1);
+    if (!Number.isFinite(refScale)) refScale = 1;
+    let refMirrored = localStorage.getItem('bildkastenStoryRefMirror') === '1';
     let lastPoint = null;
     let resizing = false;
     let strokeChanged = false;
@@ -294,6 +301,34 @@ def page_html():
       if (Number.isFinite(pct)) {
         setPaneSplitPercent(pct);
       }
+    }
+
+    function setReferenceScale(nextScale, showStatus = true) {
+      refScale = Math.max(0.45, Math.min(2.4, nextScale));
+      img.style.setProperty('--ref-size', Math.round(refScale * 100) + '%');
+      localStorage.setItem('bildkastenStoryRefScale', refScale.toFixed(2));
+      if (showStatus) status('Reference image ' + Math.round(refScale * 100) + '%');
+    }
+
+    function resetView() {
+      setPaneSplitPercent(50);
+      setReferenceScale(1, false);
+      status('View reset');
+    }
+
+    function applyReferenceMirror() {
+      img.classList.toggle('mirrored', refMirrored);
+      traceRef.classList.toggle('mirrored', refMirrored);
+      refMirror.classList.toggle('active', refMirrored);
+      refMirror.textContent = refMirrored ? 'Mirrored' : 'Mirror';
+      refMirror.title = refMirrored ? 'Unmirror reference' : 'Mirror reference horizontally';
+    }
+
+    function toggleReferenceMirror() {
+      refMirrored = !refMirrored;
+      localStorage.setItem('bildkastenStoryRefMirror', refMirrored ? '1' : '0');
+      applyReferenceMirror();
+      status(refMirrored ? 'Reference mirrored' : 'Reference normal');
     }
 
     function canvasSize() {
@@ -567,6 +602,7 @@ def page_html():
     img.addEventListener('dragstart', e => e.preventDefault());
 
     divider.addEventListener('pointerdown', e => {
+      if (e.target.closest('button')) return;
       resizing = true;
       divider.classList.add('dragging');
       divider.setPointerCapture(e.pointerId);
@@ -581,10 +617,15 @@ def page_html():
     }
     divider.addEventListener('pointerup', endResize);
     divider.addEventListener('pointercancel', endResize);
-    divider.addEventListener('dblclick', () => setPaneSplitPercent(50));
-    refSmaller.onclick = () => setPaneSplitPercent(Number(localStorage.getItem('bildkastenStorySplit') || 50) - 8);
-    refReset.onclick = () => setPaneSplitPercent(50);
-    refBigger.onclick = () => setPaneSplitPercent(Number(localStorage.getItem('bildkastenStorySplit') || 50) + 8);
+    divider.addEventListener('dblclick', resetView);
+    viewReset.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      resetView();
+    };
+    refSmaller.onclick = () => setReferenceScale(refScale - 0.1);
+    refBigger.onclick = () => setReferenceScale(refScale + 0.1);
+    refMirror.onclick = toggleReferenceMirror;
     window.addEventListener('resize', fitCanvasStack);
 
     function scheduleSave() {
@@ -730,6 +771,8 @@ def page_html():
     }, true);
 
     restorePaneSplit();
+    setReferenceScale(refScale);
+    applyReferenceMirror();
     resetCanvas();
     loadImages();
   </script>
