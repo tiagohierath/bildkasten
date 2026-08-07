@@ -27,12 +27,14 @@ Usage:
   bildkasten setup            create .venv and install Python packages
   bildkasten doctor           check dependencies, index, and viewer
   bildkasten index [folder]   build/rebuild the image index
+  bildkasten storyboard       open the browser storyboard doodle tool
   bildkasten "query"          search from the shell and open results
 
 Examples:
   bildkasten setup
   bildkasten index ~/Pictures/reference
   bildkasten
+  bildkasten storyboard
   bildkasten "red cloak" --limit 12 --print
 EOF
 }
@@ -68,6 +70,10 @@ case "${1:-}" in
   index)
     shift
     python "$DIR/src/build_index.py" "${1:-$DIR/images}"
+    ;;
+  storyboard)
+    shift
+    python "$DIR/src/storyboard.py" "$@"
     ;;
   "")
     python "$DIR/src/tui.py"

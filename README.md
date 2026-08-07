@@ -36,6 +36,7 @@ If something feels wrong:
 - Runs locally; your images are not uploaded anywhere.
 - Opens a simple TUI when you run `bildkasten`.
 - Keeps the fast CLI flow: `bildkasten "girl sitting"`.
+- Opens a browser storyboard doodle tool for redrawing references quickly.
 - Uses `mpv` for viewing images when available.
 
 ## Quick Start With Nix
@@ -97,6 +98,18 @@ Search from the shell and open the top results:
 ./bin/bildkasten "girl sitting"
 ```
 
+Open the storyboard doodle tool:
+
+```bash
+./bin/bildkasten storyboard
+```
+
+Open storyboard mode for a specific folder and save boards somewhere else:
+
+```bash
+./bin/bildkasten storyboard ~/Pictures/reference --out ~/storyboards
+```
+
 Print results without opening a viewer:
 
 ```bash
@@ -121,6 +134,37 @@ Limit results:
 - `Ctrl+U`: clear the search line.
 - `q`: quit.
 
+## Storyboard Mode
+
+Storyboard mode opens a local browser page:
+
+```bash
+./bin/bildkasten storyboard
+```
+
+It shows one reference image on the left and a white canvas on the right. Use it
+for rough storyboard ideas, not polished art.
+
+The important controls are:
+
+- `Pen` / `p`: draw black strokes.
+- `Eraser` / `e`: erase with white strokes.
+- Brush slider: change stroke size.
+- `Undo` / `Ctrl+Z`: undo the last stroke or clear.
+- `Clear`: wipe the current board.
+- `Save now`: save the current board.
+- `Save + Next`: save and move forward.
+- `Skip`: move forward without intentionally saving the current board.
+- `Prev`: go back one image.
+- Aspect selector: switch between `16:9` and `4:3`.
+
+You can choose the `30 most recent`, `100 most recent`, `All images`, or a custom
+recent count. Boards autosave after each stroke and are saved as PNG files in:
+
+```text
+storyboards/
+```
+
 ## Files
 
 Bildkasten writes its local index here:
@@ -128,6 +172,7 @@ Bildkasten writes its local index here:
 ```text
 data/embeddings.npy
 data/metadata.json
+storyboards/
 ```
 
 Those files are ignored by git because they are machine-specific and can be

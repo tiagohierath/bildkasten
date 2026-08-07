@@ -9,6 +9,7 @@ data/
 images/
 library/
 models/
+storyboards/
 
 # Loose local image dumps
 *.jpg
