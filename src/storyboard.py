@@ -63,78 +63,104 @@ def page_html():
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bildkasten Storyboard</title>
   <style>
-    :root { color-scheme: light; --bg:#f5f5f2; --fg:#171717; --muted:#666; --line:#c9c9c3; }
+    :root { color-scheme: light; --bg:#f5f5f2; --paper:#fff; --fg:#171717; --muted:#666; --line:#c9c9c3; --soft:#eeeeea; }
     * { box-sizing: border-box; }
-    body { margin: 0; font: 15px/1.35 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
-    header { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; padding: .75rem 1rem; border-bottom: 1px solid var(--line); background: #fff; }
-    header strong { margin-right: .5rem; }
-    button, select, input { font: inherit; border: 1px solid var(--line); background: #fff; color: var(--fg); padding: .42rem .55rem; }
+    body { min-height: 100vh; margin: 0; display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+    header { display: grid; grid-template-columns: auto 1fr; gap: .65rem 1rem; align-items: start; padding: .8rem 1rem; border-bottom: 1px solid var(--line); background: var(--paper); }
+    .title { min-width: 220px; }
+    .title strong { display: block; letter-spacing: .02em; }
+    .title span { display: block; margin-top: .15rem; color: var(--muted); font-size: .9rem; }
+    .controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+    .controls.primary { justify-content: flex-start; }
+    .controls.secondary { grid-column: 2; }
+    button, select, input { font: inherit; border: 1px solid var(--line); background: var(--paper); color: var(--fg); padding: .42rem .55rem; }
     button { cursor: pointer; }
-    button:hover { background: #eee; }
+    button:hover { background: var(--soft); }
     button.active { background: #171717; border-color: #171717; color: #fff; }
     input[type=number] { width: 5.5rem; }
     input[type=range] { width: 7rem; vertical-align: middle; }
-    main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(360px, 1fr); gap: 1rem; padding: 1rem; height: calc(100vh - 59px); }
+    main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(360px, 1fr); gap: 1rem; padding: 1rem; }
     .pane { min-width: 0; display: flex; flex-direction: column; gap: .6rem; }
-    .label { display: flex; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: .9rem; }
-    .frame { flex: 1; min-height: 0; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); overflow: hidden; }
+    .label { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; color: var(--muted); font-size: .9rem; }
+    .label strong { color: var(--fg); font-size: 1rem; font-weight: 650; }
+    .frame { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--paper); border: 1px solid var(--line); overflow: hidden; padding: .5rem; }
     #reference { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
-    #board { width: 100%; max-height: 100%; height: auto; background: #fff; touch-action: none; cursor: crosshair; box-shadow: 0 0 0 1px #ddd; }
+    #board { max-width: 100%; max-height: 100%; width: auto; height: auto; background: #fff; border: 1px solid #ddd; touch-action: none; cursor: crosshair; }
     .bar { display: grid; grid-template-columns: 1fr auto; gap: .7rem; align-items: center; }
-    progress { width: 100%; height: 1rem; }
+    progress { width: 100%; height: 1rem; border: 1px solid var(--line); background: var(--paper); }
+    progress::-webkit-progress-bar { background: var(--paper); }
+    progress::-webkit-progress-value { background: var(--fg); }
+    progress::-moz-progress-bar { background: var(--fg); }
     .tools { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
     .status { color: var(--muted); min-height: 1.3rem; }
+    .save-state { color: var(--fg); }
+    .hint { color: var(--muted); font-size: .9rem; }
     .empty { padding: 2rem; text-align: center; color: var(--muted); }
+    [hidden] { display: none !important; }
     @media (max-width: 850px) {
-      main { grid-template-columns: 1fr; height: auto; }
+      header { grid-template-columns: 1fr; }
+      .controls.secondary { grid-column: 1; }
+      main { grid-template-columns: 1fr; min-height: auto; }
       .frame { min-height: 42vh; }
     }
   </style>
 </head>
 <body>
   <header>
-    <strong>Bildkasten Storyboard</strong>
-    <select id="mode">
-      <option value="recent" data-count="30">30 most recent</option>
-      <option value="recent" data-count="100">100 most recent</option>
-      <option value="all">All images</option>
-      <option value="recent" data-custom="1">Custom recent</option>
-    </select>
-    <input id="count" type="number" min="1" value="30" hidden>
-    <select id="aspect">
-      <option value="16:9">16:9</option>
-      <option value="4:3">4:3</option>
-    </select>
-    <button id="start">Start</button>
-    <button id="prev">Prev</button>
-    <button id="next">Save + Next</button>
-    <button id="skip">Skip</button>
-    <span class="status" id="status"></span>
+    <div class="title">
+      <strong>BILDKASTEN STORYBOARD</strong>
+      <span>rough redraws, one reference at a time</span>
+    </div>
+    <div class="controls primary">
+      <select id="mode">
+        <option value="recent" data-count="30">30 most recent</option>
+        <option value="recent" data-count="100">100 most recent</option>
+        <option value="all">All images</option>
+        <option value="recent" data-custom="1">Custom recent</option>
+      </select>
+      <input id="count" type="number" min="1" value="30" hidden>
+      <select id="aspect">
+        <option value="16:9">16:9</option>
+        <option value="4:3">4:3</option>
+      </select>
+      <button id="start">Load</button>
+      <span class="status" id="status"></span>
+    </div>
+    <div class="controls secondary">
+      <button id="prev">Prev</button>
+      <button id="next">Save + Next</button>
+      <button id="skip">Skip</button>
+      <span class="hint">P pen · E eraser · Ctrl+Z undo</span>
+    </div>
   </header>
 
   <main>
     <section class="pane">
-      <div class="label"><span>Reference</span><span id="refName"></span></div>
-      <div class="frame"><img id="reference" alt=""></div>
+      <div class="label"><strong>Reference</strong><span id="refName"></span></div>
+      <div class="frame">
+        <img id="reference" alt="">
+        <div id="empty" class="empty" hidden>No images found. Run bildkasten index /path/to/images or pass a folder to storyboard.</div>
+      </div>
       <div class="bar"><progress id="progress" value="0" max="1"></progress><span id="counter">0/0</span></div>
     </section>
     <section class="pane">
-      <div class="label"><span>Storyboard canvas</span><span id="saveState">Not saved yet</span></div>
+      <div class="label"><strong>Board</strong><span id="saveState" class="save-state">Not saved yet</span></div>
       <div class="frame"><canvas id="board"></canvas></div>
       <div class="tools">
         <button id="pen" class="active">Pen</button>
         <button id="eraser">Eraser</button>
-        <label>Brush <input id="brush" type="range" min="1" max="22" value="4"></label>
+        <label>Size <input id="brush" type="range" min="1" max="22" value="4"> <span id="brushValue">4</span></label>
         <button id="undo">Undo</button>
         <button id="clear">Clear</button>
         <button id="save">Save now</button>
       </div>
-      <div class="status">Simple doodles only: pen, eraser, undo, clear. Autosaves after each stroke.</div>
+      <div class="status">Autosaves after each stroke. PNG files go to the local storyboards folder.</div>
     </section>
   </main>
 
   <script>
     const img = document.getElementById('reference');
+    const empty = document.getElementById('empty');
     const canvas = document.getElementById('board');
     const ctx = canvas.getContext('2d');
     const mode = document.getElementById('mode');
@@ -146,6 +172,7 @@ def page_html():
     const progress = document.getElementById('progress');
     const counter = document.getElementById('counter');
     const brush = document.getElementById('brush');
+    const brushValue = document.getElementById('brushValue');
     const penBtn = document.getElementById('pen');
     const eraserBtn = document.getElementById('eraser');
     let images = [];
@@ -188,6 +215,7 @@ def page_html():
     function applyTool() {
       ctx.strokeStyle = tool === 'eraser' ? 'white' : 'black';
       ctx.lineWidth = Number(brush.value);
+      brushValue.textContent = brush.value;
       penBtn.classList.toggle('active', tool === 'pen');
       eraserBtn.classList.toggle('active', tool === 'eraser');
       canvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
@@ -202,10 +230,17 @@ def page_html():
     function showImage() {
       cancelScheduledSave();
       if (!images.length) {
-        document.querySelector('.frame').innerHTML = '<div class="empty">No images found. Run bildkasten index /path/to/images or pass a folder to storyboard.</div>';
+        img.hidden = true;
+        empty.hidden = false;
+        refName.textContent = '';
+        progress.max = 1;
+        progress.value = 0;
+        counter.textContent = '0/0';
         return;
       }
       const item = images[index];
+      img.hidden = false;
+      empty.hidden = true;
       img.src = item.url + '?t=' + Date.now();
       img.alt = item.name;
       refName.textContent = item.name;
