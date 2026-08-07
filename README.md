@@ -156,6 +156,8 @@ The important controls are:
 
 - `Pen` / `p`: draw black strokes.
 - `Eraser` / `e`: erase with white strokes.
+- `Trace` / `t`: show the reference faintly under the board while drawing.
+  The reference is not saved into the storyboard PNG.
 - Brush slider: change stroke size.
 - `Undo` / `Ctrl+Z` / `z`: undo the last stroke or clear.
 - `Clear`: wipe the current board.

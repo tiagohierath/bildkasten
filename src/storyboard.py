@@ -99,16 +99,19 @@ def page_html():
     .divider:hover::after, .divider.dragging::after { background: repeating-linear-gradient(90deg, #9f9987 0 1px, #d5d0c0 1px 3px); }
     .label { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; color: var(--muted); font-size: .9rem; }
     .label strong { color: var(--fg); font-size: 1rem; font-weight: 650; }
+    .label-title { display: inline-flex; gap: .45rem; align-items: center; min-width: 0; }
     .label-actions { display: inline-flex; gap: .25rem; align-items: center; min-width: 0; }
     .label-actions button { padding: .12rem .38rem; min-width: 1.8rem; }
+    .label button { padding: .12rem .42rem; min-width: 0; }
     #refName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .frame { flex: 1; min-height: 0; display: grid; place-items: center; background: var(--paper); border: 1px solid var(--line); overflow: hidden; padding: .5rem; }
     .board-frame { background: #474744; touch-action: none; user-select: none; -webkit-user-select: none; }
     #reference { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; -webkit-user-drag: none; user-select: none; }
     .canvas-stack { position: relative; background: #fff; border: 1px solid #a7a7a0; user-select: none; -webkit-user-select: none; }
-    .canvas-stack canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-    #guide { pointer-events: none; }
-    #board { touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+    .canvas-stack canvas, .trace-ref { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .trace-ref { z-index: 1; object-fit: contain; opacity: .46; filter: grayscale(1) contrast(.92) brightness(1.1); pointer-events: none; }
+    #guide { z-index: 2; pointer-events: none; }
+    #board { z-index: 3; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
     .bar { display: grid; grid-template-columns: 1fr auto; gap: .7rem; align-items: center; }
     progress { width: 100%; height: 1rem; border: 1px solid var(--line); background: var(--paper); }
     progress::-webkit-progress-bar { background: var(--paper); }
@@ -167,7 +170,7 @@ def page_html():
       <details class="info" id="infoMenu">
         <summary title="Info">i</summary>
         <div class="info-panel">
-          <div class="info-row"><strong>Keys</strong><span>P pen · E eraser · Ctrl+Enter save + next · Ctrl+Z undo</span></div>
+          <div class="info-row"><strong>Keys</strong><span>P pen · E eraser · T trace · Ctrl+Enter save + next · Ctrl+Z undo</span></div>
           <div class="info-row"><strong>Status</strong><span id="infoStatus">Loading</span></div>
           <div class="info-row"><strong>Saving</strong><span id="infoSavePath"></span></div>
         </div>
@@ -194,9 +197,13 @@ def page_html():
     </section>
     <div id="divider" class="divider" title="Drag to resize"></div>
     <section class="pane right-pane">
-      <div class="label"><strong>Board</strong><span id="saveState" class="save-state">Not saved yet</span></div>
+      <div class="label">
+        <span class="label-title"><strong>Board</strong><button id="trace" title="Show reference under the board">Trace</button></span>
+        <span id="saveState" class="save-state">Not saved yet</span>
+      </div>
       <div id="boardFrame" class="frame board-frame">
         <div id="canvasStack" class="canvas-stack">
+          <img id="traceRef" class="trace-ref" alt="" hidden>
           <canvas id="guide"></canvas>
           <canvas id="board"></canvas>
         </div>
@@ -218,6 +225,7 @@ def page_html():
     const empty = document.getElementById('empty');
     const workArea = document.querySelector('main');
     const canvasStack = document.getElementById('canvasStack');
+    const traceRef = document.getElementById('traceRef');
     const boardFrame = document.getElementById('boardFrame');
     const guide = document.getElementById('guide');
     const guideCtx = guide.getContext('2d');
@@ -238,6 +246,7 @@ def page_html():
     const brushValue = document.getElementById('brushValue');
     const penBtn = document.getElementById('pen');
     const eraserBtn = document.getElementById('eraser');
+    const traceBtn = document.getElementById('trace');
     const divider = document.getElementById('divider');
     const refSmaller = document.getElementById('refSmaller');
     const refReset = document.getElementById('refReset');
@@ -249,6 +258,7 @@ def page_html():
     let undoStack = [];
     let saveTimer = null;
     let tool = 'pen';
+    let trace = localStorage.getItem('bildkastenStoryTrace') === '1';
     let lastPoint = null;
     let resizing = false;
     let strokeChanged = false;
@@ -324,8 +334,6 @@ def page_html():
 
     function drawGuides() {
       guideCtx.clearRect(0, 0, guide.width, guide.height);
-      guideCtx.fillStyle = 'white';
-      guideCtx.fillRect(0, 0, guide.width, guide.height);
       guideCtx.save();
       guideCtx.strokeStyle = '#17345f';
       guideCtx.lineWidth = 1.25;
@@ -348,6 +356,23 @@ def page_html():
       applyTool();
     }
 
+    function applyTrace() {
+      traceBtn.classList.toggle('active', trace);
+      traceBtn.textContent = trace ? 'Trace on' : 'Trace';
+      traceBtn.title = trace ? 'Hide tracing reference' : 'Show reference under the board';
+      traceRef.hidden = !trace || !images.length;
+      if (trace && img.src) {
+        traceRef.src = img.src;
+      }
+    }
+
+    function toggleTrace() {
+      trace = !trace;
+      localStorage.setItem('bildkastenStoryTrace', trace ? '1' : '0');
+      applyTrace();
+      status(trace ? 'Trace on' : 'Trace off');
+    }
+
     function applyTool() {
       brushValue.textContent = brush.value;
       penBtn.classList.toggle('active', tool === 'pen');
@@ -365,6 +390,8 @@ def page_html():
       cancelScheduledSave();
       if (!images.length) {
         img.hidden = true;
+        traceRef.hidden = true;
+        traceRef.removeAttribute('src');
         empty.hidden = false;
         refName.textContent = '';
         progress.max = 1;
@@ -377,15 +404,18 @@ def page_html():
       empty.hidden = true;
       img.src = item.url + '?t=' + Date.now();
       img.alt = item.name;
+      traceRef.src = img.src;
       refName.textContent = item.name;
       progress.max = images.length;
       progress.value = index + 1;
       counter.textContent = (index + 1) + '/' + images.length;
       resetCanvas();
+      applyTrace();
     }
 
     async function loadImages() {
       if (dirty) await saveCurrent(false);
+      if (document.activeElement === clipSearch) clipSearch.blur();
       const q = clipSearch.value.trim();
       if (q) {
         status('Searching...');
@@ -625,6 +655,8 @@ def page_html():
       out.width = canvas.width;
       out.height = canvas.height;
       const outCtx = out.getContext('2d');
+      outCtx.fillStyle = 'white';
+      outCtx.fillRect(0, 0, out.width, out.height);
       outCtx.drawImage(guide, 0, 0);
       outCtx.drawImage(canvas, 0, 0);
       return out;
@@ -656,6 +688,7 @@ def page_html():
     document.getElementById('undo').onclick = undo;
     penBtn.onclick = () => setTool('pen');
     eraserBtn.onclick = () => setTool('eraser');
+    traceBtn.onclick = toggleTrace;
     brush.oninput = applyTool;
     aspect.onchange = async () => {
       if (dirty) await saveCurrent(false);
@@ -675,8 +708,21 @@ def page_html():
         return;
       }
       if (e.target.matches('input, select, textarea')) return;
-      if (e.key.toLowerCase() === 'p') setTool('pen');
-      if (e.key.toLowerCase() === 'e') setTool('eraser');
+      if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setTool('pen');
+        return;
+      }
+      if (e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setTool('eraser');
+        return;
+      }
+      if (e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        toggleTrace();
+        return;
+      }
       if (e.key.toLowerCase() === 'z') {
         e.preventDefault();
         undo();
