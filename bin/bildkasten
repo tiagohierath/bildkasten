@@ -25,16 +25,20 @@ Bildkasten
 Usage:
   bildkasten                  open the terminal UI
   bildkasten setup            create .venv and install Python packages
+  bildkasten install-user     link bildkasten into ~/.local/bin
   bildkasten doctor           check dependencies, index, and viewer
   bildkasten index [folder]   build/rebuild the image index
   bildkasten storyboard       open the browser storyboard doodle tool
+  bildkasten search "query"   search from the shell and open results
   bildkasten "query"          search from the shell and open results
 
 Examples:
   bildkasten setup
+  bildkasten install-user
   bildkasten index ~/Pictures/reference
   bildkasten
   bildkasten storyboard
+  bildkasten search "red cloak" --limit 12 --print
   bildkasten "red cloak" --limit 12 --print
 EOF
 }
@@ -52,8 +56,27 @@ if [ "${1:-}" = "setup" ]; then
   python -m pip install -r "$DIR/requirements.txt"
   echo
   echo "Setup complete."
-  echo "Next: $0 index /path/to/images"
-  echo "Then: $0"
+  echo "Next: $0 install-user"
+  echo "Then: bildkasten index /path/to/images"
+  echo "Then: bildkasten"
+  exit 0
+fi
+
+if [ "${1:-}" = "install-user" ]; then
+  USER_BIN_DIR="${BILDKASTEN_USER_BIN_DIR:-${HOME}/.local/bin}"
+  TARGET="$USER_BIN_DIR/bildkasten"
+  mkdir -p "$USER_BIN_DIR"
+  if [ -e "$TARGET" ] && [ ! -L "$TARGET" ]; then
+    echo "Refusing to overwrite non-symlink: $TARGET" >&2
+    exit 1
+  fi
+  ln -sfn "$DIR/bin/bildkasten" "$TARGET"
+  echo "Installed: $TARGET -> $DIR/bin/bildkasten"
+  if command -v bildkasten >/dev/null 2>&1 && [ "$(command -v bildkasten)" = "$TARGET" ]; then
+    echo "You can now run: bildkasten"
+  else
+    echo "Add this to PATH if needed: $USER_BIN_DIR"
+  fi
   exit 0
 fi
 
@@ -71,9 +94,13 @@ case "${1:-}" in
     shift
     python "$DIR/src/build_index.py" "${1:-$DIR/images}"
     ;;
-  storyboard)
+  storyboard|story|board|sb)
     shift
     python "$DIR/src/storyboard.py" "$@"
+    ;;
+  search)
+    shift
+    python "$DIR/src/search.py" "$@"
     ;;
   "")
     python "$DIR/src/tui.py"

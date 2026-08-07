@@ -20,14 +20,15 @@ This is the shortest path for someone who just cloned the repo:
 ```bash
 cd bildkasten
 ./bin/bildkasten setup
-./bin/bildkasten index ~/Pictures
-./bin/bildkasten
+./bin/bildkasten install-user
+bildkasten index ~/Pictures
+bildkasten
 ```
 
 If something feels wrong:
 
 ```bash
-./bin/bildkasten doctor
+bildkasten doctor
 ```
 
 ## What It Does
@@ -46,8 +47,9 @@ git clone https://github.com/tiagohierath/bildkasten.git
 cd bildkasten
 nix develop
 ./bin/bildkasten setup
-./bin/bildkasten index ~/Pictures/reference
-./bin/bildkasten
+./bin/bildkasten install-user
+bildkasten index ~/Pictures/reference
+bildkasten
 ```
 
 The first run downloads the CLIP model weights from Hugging Face. After that the
@@ -61,8 +63,9 @@ You need Python 3.12+, pip, and preferably `mpv`.
 git clone https://github.com/tiagohierath/bildkasten.git
 cd bildkasten
 ./bin/bildkasten setup
-./bin/bildkasten index ~/Pictures/reference
-./bin/bildkasten
+./bin/bildkasten install-user
+bildkasten index ~/Pictures/reference
+bildkasten
 ```
 
 If you do not have `mpv`, Bildkasten tries `xdg-open` or `gio open`. You can
@@ -77,69 +80,71 @@ export BILDKASTEN_VIEWER="feh"
 Open the TUI:
 
 ```bash
-./bin/bildkasten
+bildkasten
 ```
 
 Build or rebuild the index:
 
 ```bash
-./bin/bildkasten index ~/Pictures/reference
+bildkasten index ~/Pictures/reference
 ```
 
 Check whether dependencies, viewer, and index are ready:
 
 ```bash
-./bin/bildkasten doctor
+bildkasten doctor
 ```
 
 Search from the shell and open the top results:
 
 ```bash
-./bin/bildkasten "girl sitting"
+bildkasten search "girl sitting"
 ```
 
 Open the storyboard doodle tool:
 
 ```bash
-./bin/bildkasten storyboard
+bildkasten storyboard
 ```
 
 Open storyboard mode for a specific folder and save boards somewhere else:
 
 ```bash
-./bin/bildkasten storyboard ~/Pictures/reference --out ~/storyboards
+bildkasten storyboard ~/Pictures/reference --out ~/storyboards
 ```
 
 Print results without opening a viewer:
 
 ```bash
-./bin/bildkasten "red cloak" --print
+bildkasten search "red cloak" --print
 ```
 
 Limit results:
 
 ```bash
-./bin/bildkasten "foggy city" --limit 12
+bildkasten search "foggy city" --limit 12
 ```
 
 ## TUI Keys
 
-- Type a search, then press `Enter`.
-- `Up` / `Down` or `k` / `j`: move through results.
-- `Space` or `o`: open the selected image.
-- `p`: play the whole result set in the viewer.
-- `c`: copy the selected image path.
-- `r`: reveal the selected image in its folder.
+- Type normally; `Backspace`, `Delete`, `Left`, and `Right` edit the search.
+- Press `Enter` to search.
+- `Up` / `Down`: move through results.
+- `Ctrl+B`: open the browser storyboard tool.
+- `Ctrl+O`: open the selected image.
+- `Ctrl+P`: play the whole result set in the viewer.
+- `Ctrl+Y`: copy the selected image path.
+- `Ctrl+R`: reveal the selected image in its folder.
 - `PageUp` / `PageDown`: move faster through results.
 - `Ctrl+U`: clear the search line.
-- `q`: quit.
+- `Esc` or `Ctrl+Q`: quit.
 
 ## Storyboard Mode
 
 Storyboard mode opens a local browser page:
 
 ```bash
-./bin/bildkasten storyboard
+bildkasten storyboard
 ```
 
 It shows one reference image on the left and a white canvas on the right. Use it

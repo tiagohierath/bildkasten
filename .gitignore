@@ -1,14 +1,21 @@
 # Local Python environments
+.venv
 .venv/
+venv
 venv/
 __pycache__/
 *.pyc
 
 # Local Bildkasten state
+data
 data/
+images
 images/
+library
 library/
+models
 models/
+storyboards
 storyboards/
 
 # Loose local image dumps
