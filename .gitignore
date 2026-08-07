@@ -1,0 +1,23 @@
+# Local Python environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Local Bildkasten state
+data/
+images/
+library/
+models/
+
+# Loose local image dumps
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.heic
+
+# OS/editor noise
+.DS_Store
+*.swp

@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  SOURCE_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  case "$SOURCE" in
+    /*) ;;
+    *) SOURCE="$SOURCE_DIR/$SOURCE" ;;
+  esac
+done
+DIR="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+if [ -n "${BILDKASTEN_LIBSTDCPP:-}" ]; then
+  export LD_LIBRARY_PATH="$BILDKASTEN_LIBSTDCPP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+elif [ -d /nix/store/hngmi01i8wgi25a0byrxcn4ysz5j79mw-gcc-15.2.0-lib/lib ]; then
+  export LD_LIBRARY_PATH="/nix/store/hngmi01i8wgi25a0byrxcn4ysz5j79mw-gcc-15.2.0-lib/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+usage() {
+  cat <<'EOF'
+Bildkasten
+
+Usage:
+  bildkasten                  open the terminal UI
+  bildkasten setup            create .venv and install Python packages
+  bildkasten doctor           check dependencies, index, and viewer
+  bildkasten index [folder]   build/rebuild the image index
+  bildkasten "query"          search from the shell and open results
+
+Examples:
+  bildkasten setup
+  bildkasten index ~/Pictures/reference
+  bildkasten
+  bildkasten "red cloak" --limit 12 --print
+EOF
+}
+
+if [ "${1:-}" = "help" ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+if [ "${1:-}" = "setup" ]; then
+  PYTHON_BIN="${PYTHON:-python3}"
+  "$PYTHON_BIN" -m venv "$DIR/.venv"
+  source "$DIR/.venv/bin/activate"
+  python -m pip install --upgrade pip
+  python -m pip install -r "$DIR/requirements.txt"
+  echo
+  echo "Setup complete."
+  echo "Next: $0 index /path/to/images"
+  echo "Then: $0"
+  exit 0
+fi
+
+if [ -d "$DIR/.venv" ]; then
+  source "$DIR/.venv/bin/activate"
+elif [ -d "$DIR/venv" ]; then
+  source "$DIR/venv/bin/activate"
+fi
+
+case "${1:-}" in
+  doctor)
+    python "$DIR/src/doctor.py"
+    ;;
+  index)
+    shift
+    python "$DIR/src/build_index.py" "${1:-$DIR/images}"
+    ;;
+  "")
+    python "$DIR/src/tui.py"
+    ;;
+  *)
+    python "$DIR/src/search.py" "$@"
+    ;;
+esac
