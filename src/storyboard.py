@@ -633,15 +633,30 @@ def page_html():
       saveTimer = setTimeout(() => saveCurrent(false), 650);
     }
 
+    function boardHasDrawing() {
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] !== 0) return true;
+      }
+      return false;
+    }
+
     async function saveCurrent(showStatus = true) {
-      if (!images.length) return;
+      if (!images.length) return false;
       cancelScheduledSave();
+      if (!boardHasDrawing()) {
+        dirty = false;
+        saveState.textContent = 'Empty drawing not saved';
+        if (showStatus) status('Draw something before saving, or use Skip.');
+        return false;
+      }
       const item = images[index];
       const payload = {
         index: index + 1,
         imageId: item.id,
         imageName: item.name,
         aspect: aspect.value,
+        hasDrawing: true,
         dataUrl: exportCanvas().toDataURL('image/png'),
       };
       const res = await fetch('/api/save', {
@@ -659,11 +674,18 @@ def page_html():
       dirty = false;
       saveState.textContent = 'Saved ' + data.file;
       if (showStatus) status('Saved ' + data.file);
+      return true;
     }
 
     async function next(save) {
       if (!images.length) return;
-      if (save) await saveCurrent(false);
+      if (save) {
+        const saved = await saveCurrent(false);
+        if (!saved) {
+          status('Empty drawing not saved. Use Skip to move on.');
+          return;
+        }
+      }
       if (index >= images.length - 1) {
         status('Finished ' + images.length + ' images.');
         saveState.textContent = save ? 'Saved final image' : 'Final image skipped';
@@ -885,6 +907,9 @@ class StoryboardHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         try:
             data = json.loads(self.rfile.read(length))
+            if data.get("hasDrawing") is not True:
+                self.send_json({"ok": False, "error": "empty drawing"}, status=400)
+                return
             header, encoded = data["dataUrl"].split(",", 1)
             raw = base64.b64decode(encoded)
             aspect = data.get("aspect", "16:9").replace(":", "x")

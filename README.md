@@ -182,8 +182,9 @@ saved into the final PNG.
 
 `All images` is the default and is shuffled each time you load it. You can also
 choose the `30 most recent`, `100 most recent`, or a custom recent count.
-`4:3` is the default board format. Boards autosave after each stroke and are
-saved as PNG files in:
+`4:3` is the default board format. Boards autosave after each stroke, but empty
+drawings are not saved; use `Skip` to move past a reference without creating a
+board. Saved boards are written to:
 
 ```text
 storyboards/
