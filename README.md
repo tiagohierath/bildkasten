@@ -128,11 +128,11 @@ bildkasten search "foggy city" --limit 12
 ## TUI Keys
 
 - Type normally; `Backspace`, `Delete`, `Left`, and `Right` edit the search.
-- Press `Enter` to search.
+- Press `Enter` to search and open one MPV slideshow with the results.
 - `Up` / `Down`: move through results.
 - `Ctrl+B`: open the browser storyboard tool.
 - `Ctrl+O`: open the selected image.
-- `Ctrl+P`: play the whole result set in the viewer.
+- `Ctrl+P`: replay the whole result set as one slideshow.
 - `Ctrl+Y`: copy the selected image path.
 - `Ctrl+R`: reveal the selected image in its folder.
 - `PageUp` / `PageDown`: move faster through results.

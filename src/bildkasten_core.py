@@ -123,14 +123,25 @@ def choose_viewer():
     raise RuntimeError("No viewer found. Install mpv or set BILDKASTEN_VIEWER.")
 
 
+def single_file_opener(viewer):
+    name = Path(viewer[0]).name if viewer else ""
+    return name in {"xdg-open", "open"} or viewer[:2] == ["gio", "open"]
+
+
 def open_files(files, wait=True):
     files = [str(f) for f in files if f]
     if not files:
         return
     viewer = choose_viewer()
-    if not wait or viewer[-1] in {"xdg-open", "open"} or viewer[:2] == ["gio", "open"]:
-        for file in files:
-            subprocess.Popen(viewer + [file])
+    if single_file_opener(viewer):
+        if len(files) > 1:
+            raise RuntimeError(
+                "Multiple-image slideshow needs mpv or BILDKASTEN_VIEWER set to a viewer that accepts many files."
+            )
+        subprocess.Popen(viewer + files)
+        return
+    if not wait:
+        subprocess.Popen(viewer + files)
         return
     subprocess.run(viewer + files)
 

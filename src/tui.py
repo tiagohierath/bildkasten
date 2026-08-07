@@ -10,7 +10,7 @@ from bildkasten_core import BASE, available_index, copy_text, index_stats, open_
 
 HELP = (
     "Type search  Enter search  Backspace erase  Left/Right edit  "
-    "Up/Down select  Ctrl+B storyboard  Ctrl+O open  Ctrl+P play  "
+    "Up/Down select  Ctrl+B storyboard  Ctrl+O open  Ctrl+P replay slideshow  "
     "Ctrl+Y copy  Ctrl+R reveal  Ctrl+U clear  Esc/Ctrl+Q quit"
 )
 
@@ -124,7 +124,12 @@ class App:
         try:
             self.results = search(self.query, limit=80)
             self.selected = 0
-            self.status = f"{len(self.results)} results for: {self.query}"
+            if self.results:
+                self.status = f"{len(self.results)} results for: {self.query}. Opening slideshow..."
+                self.draw()
+                self.open_result_slideshow()
+            else:
+                self.status = f"No results for: {self.query}"
         except Exception as exc:
             self.results = []
             self.status = f"Search failed: {exc}"
@@ -145,11 +150,14 @@ class App:
             return
         self.status = "Playing result set..."
         self.draw()
+        self.open_result_slideshow()
+
+    def open_result_slideshow(self):
         try:
             open_files([item["path"] for item in self.results], wait=False)
-            self.status = "Sent result set to viewer."
+            self.status = f"Opened one slideshow with {len(self.results)} images."
         except Exception as exc:
-            self.status = f"Play failed: {exc}"
+            self.status = f"Slideshow failed: {exc}"
 
     def copy_selected(self):
         if not self.results:
