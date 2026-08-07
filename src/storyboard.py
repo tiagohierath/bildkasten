@@ -74,19 +74,19 @@ def page_html():
     * { box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; }
     body { min-height: 100vh; margin: 0; display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
-    header { display: grid; grid-template-columns: auto 1fr; gap: .65rem 1rem; align-items: start; padding: .8rem 1rem; border-bottom: 1px solid var(--line); background: var(--paper); }
-    .title { min-width: 220px; }
-    .title strong { display: block; letter-spacing: .02em; }
-    .title span { display: block; margin-top: .15rem; color: var(--muted); font-size: .9rem; }
-    .controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-    .controls.primary { justify-content: flex-start; }
-    .controls.secondary { grid-column: 2; }
+    header { display: flex; gap: .55rem; align-items: center; padding: .55rem .75rem; border-bottom: 1px solid var(--line); background: var(--paper); white-space: nowrap; overflow-x: auto; overflow-y: hidden; }
+    .title { flex: 0 0 auto; min-width: 0; }
+    .title strong { display: inline; letter-spacing: .02em; }
+    .title span { display: none; }
+    .controls { display: flex; gap: .35rem; align-items: center; flex-wrap: nowrap; min-width: 0; }
+    .controls.primary { flex: 1 1 auto; }
+    .controls.secondary { flex: 0 0 auto; }
     button, select, input { font: inherit; border: 1px solid var(--line); background: var(--paper); color: var(--fg); padding: .42rem .55rem; }
     button { cursor: pointer; }
     button:hover { background: var(--soft); }
     button.active { background: #171717; border-color: #171717; color: #fff; }
     input[type=number] { width: 5.5rem; }
-    .search-input { width: 12rem; }
+    .search-input { width: min(12rem, 18vw); min-width: 8rem; }
     input[type=range] { width: 7rem; vertical-align: middle; }
     main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(220px, var(--left-pane, 50%)) 18px minmax(260px, 1fr); gap: 0; padding: 1rem; touch-action: none; }
     .pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: .6rem; }
@@ -116,13 +116,19 @@ def page_html():
     progress::-moz-progress-bar { background: var(--fg); }
     .tools { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
     .status { color: var(--muted); min-height: 1.3rem; }
+    .header-status { display: none; }
     .save-state { color: var(--fg); }
-    .hint { color: var(--muted); font-size: .9rem; }
+    .info { position: relative; flex: 0 0 auto; }
+    .info summary { display: grid; place-items: center; width: 2rem; height: 2rem; border: 1px solid var(--line); background: var(--paper); cursor: help; list-style: none; }
+    .info summary:hover { background: var(--soft); }
+    .info summary::-webkit-details-marker { display: none; }
+    .info-panel { position: fixed; top: 3.1rem; right: .75rem; z-index: 30; width: min(34rem, calc(100vw - 1.5rem)); padding: .75rem .85rem; border: 1px solid var(--line); background: var(--paper); box-shadow: 0 4px 14px rgba(0,0,0,.14); color: var(--muted); white-space: normal; }
+    .info-row { display: grid; grid-template-columns: 5rem 1fr; gap: .75rem; margin: .25rem 0; }
+    .info-row strong { color: var(--fg); font-weight: 650; }
     .empty { padding: 2rem; text-align: center; color: var(--muted); }
     [hidden] { display: none !important; }
     @media (max-width: 850px) {
-      header { grid-template-columns: 1fr; }
-      .controls.secondary { grid-column: 1; }
+      .search-input { width: 9rem; }
       main { grid-template-columns: 1fr; min-height: auto; }
       .pane.left-pane, .pane.right-pane { padding: 0; }
       .divider { display: none; }
@@ -152,13 +158,20 @@ def page_html():
         <option value="3:4">Pan V 3:4</option>
       </select>
       <button id="start">Load</button>
-      <span class="status" id="status"></span>
+      <span class="status header-status" id="status"></span>
     </div>
     <div class="controls secondary">
       <button id="prev">Prev</button>
       <button id="next">Save + Next</button>
       <button id="skip">Skip</button>
-      <span class="hint">P pen · E eraser · Ctrl+Enter save + next · Ctrl+Z undo</span>
+      <details class="info" id="infoMenu">
+        <summary title="Info">i</summary>
+        <div class="info-panel">
+          <div class="info-row"><strong>Keys</strong><span>P pen · E eraser · Ctrl+Enter save + next · Ctrl+Z undo</span></div>
+          <div class="info-row"><strong>Status</strong><span id="infoStatus">Loading</span></div>
+          <div class="info-row"><strong>Saving</strong><span id="infoSavePath"></span></div>
+        </div>
+      </details>
     </div>
   </header>
 
@@ -215,6 +228,8 @@ def page_html():
     const count = document.getElementById('count');
     const aspect = document.getElementById('aspect');
     const statusEl = document.getElementById('status');
+    const infoStatus = document.getElementById('infoStatus');
+    const infoSavePath = document.getElementById('infoSavePath');
     const saveState = document.getElementById('saveState');
     const refName = document.getElementById('refName');
     const progress = document.getElementById('progress');
@@ -239,7 +254,10 @@ def page_html():
     let strokeChanged = false;
     let strokeUndoCaptured = false;
 
-    function status(text) { statusEl.textContent = text; }
+    function status(text) {
+      statusEl.textContent = text;
+      infoStatus.textContent = text || '';
+    }
 
     function cancelScheduledSave() {
       clearTimeout(saveTimer);
@@ -379,6 +397,7 @@ def page_html():
         }
         images = data.images;
         index = 0;
+        infoSavePath.textContent = data.out || '';
         status(data.selected + ' CLIP matches for: ' + q);
         showImage();
         return;
@@ -391,7 +410,8 @@ def page_html():
       const data = await res.json();
       images = data.images;
       index = 0;
-      status(data.total + ' available, ' + images.length + ' selected. Saving to ' + data.out);
+      infoSavePath.textContent = data.out || '';
+      status(data.total + ' available, ' + images.length + ' selected');
       showImage();
     }
 
