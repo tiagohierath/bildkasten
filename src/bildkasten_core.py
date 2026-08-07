@@ -138,12 +138,12 @@ def open_files(files, wait=True):
             raise RuntimeError(
                 "Multiple-image slideshow needs mpv or BILDKASTEN_VIEWER set to a viewer that accepts many files."
             )
-        subprocess.Popen(viewer + files)
+        subprocess.Popen(viewer + files, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return
     if not wait:
-        subprocess.Popen(viewer + files)
+        subprocess.Popen(viewer + files, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return
-    subprocess.run(viewer + files)
+    subprocess.run(viewer + files, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def reveal_file(file):
@@ -156,7 +156,7 @@ def reveal_file(file):
             break
     if not opener:
         raise RuntimeError("No folder opener found. Install xdg-open or gio.")
-    subprocess.Popen(opener + [str(target)])
+    subprocess.Popen(opener + [str(target)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def copy_text(text):

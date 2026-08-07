@@ -1,18 +1,14 @@
 import curses
 from pathlib import Path
 import subprocess
-import textwrap
 from urllib.request import urlopen
 import webbrowser
 
 from bildkasten_core import BASE, available_index, copy_text, index_stats, open_files, reveal_file, search
 
 
-HELP = (
-    "Type search  Enter search  Backspace erase  Left/Right edit  "
-    "Up/Down select  Ctrl+B storyboard  Ctrl+O open  Ctrl+P replay slideshow  "
-    "Ctrl+Y copy  Ctrl+R reveal  Ctrl+U clear  Esc/Ctrl+Q quit"
-)
+PRIMARY_HELP = "Enter slideshow   Up/Down select   Ctrl+B storyboard   Ctrl+O open   Ctrl+P replay   Esc quit"
+SECONDARY_HELP = "Backspace/Delete edit   Left/Right move cursor   Ctrl+U clear   Ctrl+Y copy path   Ctrl+R reveal"
 
 LOGO = [
     " ____  ___ _     ____  _  __    _    ____ _____ _____ _   _ ",
@@ -47,47 +43,76 @@ class App:
         except curses.error:
             pass
 
+    def clip(self, text, width):
+        if width <= 0:
+            return ""
+        if len(text) <= width:
+            return text
+        if width <= 1:
+            return text[:width]
+        return text[:width - 1] + "…"
+
+    def add_center(self, y, text, attr=curses.A_NORMAL):
+        _, w = self.screen.getmaxyx()
+        text = self.clip(text, max(0, w - 1))
+        self.addstr(y, max(0, (w - len(text)) // 2), text, attr)
+
+    def add_rule(self, y, left, width):
+        if width > 0:
+            self.addstr(y, left, "─" * width, curses.A_DIM)
+
     def draw(self):
         s = self.screen
         s.erase()
         h, w = s.getmaxyx()
-        if h < 12 or w < 40:
+        if h < 15 or w < 44:
             self.addstr(0, 0, "Make the terminal bigger.", curses.A_BOLD)
             s.refresh()
             return
 
-        logo = LOGO if w >= max(len(line) for line in LOGO) + 2 and h >= 18 else ["BILDKASTEN"]
+        logo = LOGO if w >= max(len(line) for line in LOGO) + 2 and h >= 22 else ["BILDKASTEN"]
         logo_top = 1
         for i, line in enumerate(logo):
-            self.addstr(logo_top + i, max(0, (w - len(line)) // 2), line, curses.A_BOLD)
+            self.add_center(logo_top + i, line, curses.A_BOLD)
 
         search_y = logo_top + len(logo) + 2
         self.draw_search_bar(search_y, w)
-        help_y = search_y + 2
-        self.addstr(help_y, max(0, (w - min(len(HELP), w - 1)) // 2), HELP, curses.A_DIM)
-
-        status_y = help_y + 2
+        status_y = search_y + 2
         if self.status:
-            for i, line in enumerate(textwrap.wrap(self.status, max(20, w - 1))[:2]):
-                self.addstr(status_y + i, 0, line, curses.A_DIM)
+            self.add_center(status_y, self.status, curses.A_DIM)
 
-        top = status_y + 3
-        visible = max(1, h - top - 1)
+        left = max(0, (w - min(104, w - 2)) // 2)
+        width = min(104, w - left - 1)
+        top = status_y + 2
+        bottom_help_y = h - 3
+        visible = max(1, bottom_help_y - top - 2)
+
+        self.add_rule(top, left, width)
+        if self.results:
+            heading = f"results {self.selected + 1}/{len(self.results)}"
+            self.addstr(top, left, heading, curses.A_DIM)
+        else:
+            self.addstr(top, left, "results", curses.A_DIM)
+
         offset = max(0, self.selected - visible + 1)
-        for row, item in enumerate(self.results[offset:offset + visible], start=top):
-            idx = offset + row - top
+        result_y = top + 2
+        for row, item in enumerate(self.results[offset:offset + visible], start=result_y):
+            idx = offset + row - result_y
             marker = ">" if idx == self.selected else " "
             score = f"{item['score']:.3f}"
             name = Path(item["path"]).name
-            line = f"{marker} {score}  {name}"
+            line = self.clip(f"{marker} {score}  {name}", width)
             attr = curses.A_REVERSE if idx == self.selected else curses.A_NORMAL
-            self.addstr(row, 0, line, attr)
+            self.addstr(row, left, line.ljust(width), attr)
 
         if self.results:
-            footer = f"{self.selected + 1}/{len(self.results)}  {self.results[self.selected]['path']}"
-            self.addstr(h - 1, 0, footer, curses.A_DIM)
+            selected_path = self.results[self.selected]["path"]
+            self.addstr(bottom_help_y - 1, left, self.clip(selected_path, width), curses.A_DIM)
         else:
-            self.addstr(top, 0, "No results yet.", curses.A_DIM)
+            self.add_center(result_y, "type a search and press Enter", curses.A_DIM)
+
+        self.add_center(bottom_help_y, PRIMARY_HELP, curses.A_DIM)
+        self.add_center(bottom_help_y + 1, SECONDARY_HELP, curses.A_DIM)
         try:
             s.move(self.input_y, min(w - 1, self.input_x + self.cursor - self.input_scroll))
         except curses.error:
